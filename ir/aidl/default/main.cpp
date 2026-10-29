@@ -57,31 +57,39 @@ ConsumerIr::ConsumerIr() {
 }
 
 ::ndk::ScopedAStatus ConsumerIr::getCarrierFreqs(std::vector<ConsumerIrFreqRange>* _aidl_return) {
+    if (!mDevice || !mDevice->get_num_carrier_freqs || !mDevice->get_carrier_freqs) {
+        return ::ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
     int32_t len = mDevice->get_num_carrier_freqs(mDevice);
     if (len < 0) {
-        (*_aidl_return).clear();
-        return ::ndk::ScopedAStatus::ok();
+        return ::ndk::ScopedAStatus::fromServiceSpecificError(-len);
     }
-
-    consumerir_freq_range_t *rangeAr = new consumerir_freq_range_t[len];
-    bool success = (mDevice->get_carrier_freqs(mDevice, len, rangeAr) >= 0);
-    if (!success) {
-        (*_aidl_return).clear();
-        return ::ndk::ScopedAStatus::ok();
+    std::vector<consumerir_freq_range_t> ranges(len);
+    int count = mDevice->get_carrier_freqs(mDevice, len, ranges.data());
+    if (count < 0) {
+        return ::ndk::ScopedAStatus::fromServiceSpecificError(-count);
     }
-
-    (*_aidl_return).resize(len);
-    for (int32_t i = 0; i < len; i++) {
-        (*_aidl_return)[i].minHz = static_cast<uint32_t>(rangeAr[i].min);
-        (*_aidl_return)[i].maxHz = static_cast<uint32_t>(rangeAr[i].max);
+    if (count > len) {
+        return ::ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    }
+    _aidl_return->resize(count);
+    for (int32_t i = 0; i < count; i++) {
+        (*_aidl_return)[i].minHz = ranges[i].min;
+        (*_aidl_return)[i].maxHz = ranges[i].max;
     }
     return ::ndk::ScopedAStatus::ok();
 }
 
 ::ndk::ScopedAStatus ConsumerIr::transmit(int32_t in_carrierFreqHz,
                                           const std::vector<int32_t>& in_pattern) {
-    if (in_carrierFreqHz > 0) {
-        mDevice->transmit(mDevice, in_carrierFreqHz, in_pattern.data(), in_pattern.size());
+    if (!mDevice || !mDevice->transmit) {
+        return ::ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
+    if (in_carrierFreqHz > 0 && !in_pattern.empty()) {
+        int result = mDevice->transmit(mDevice, in_carrierFreqHz, in_pattern.data(), in_pattern.size());
+        if (result < 0) {
+            return ::ndk::ScopedAStatus::fromServiceSpecificError(-result);
+        }
         return ::ndk::ScopedAStatus::ok();
     } else {
         return ::ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);

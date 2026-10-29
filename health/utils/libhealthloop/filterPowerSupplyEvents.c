@@ -44,6 +44,8 @@ DEFINE_BPF_PROG("skfilter/power_supply", AID_ROOT, AID_SYSTEM, skfilter_power_su
     // The upper bound of this loop has been chosen not to exceed the maximum
     // number of instructions in a BPF program (BPF loops are unrolled).
     #define LENGTH_PREFIX 16 // length of "ACTION=\0DEVPATH="
+    // Explicitly unroll to bound verifier work/logging on backported kernels.
+    #pragma unroll
     for (uint64_t i = sizeof(struct nlmsghdr) + LENGTH_PREFIX; i < 256; ++i) {
 
         // 16 bytes is big enough to cover both
